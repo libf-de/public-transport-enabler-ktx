@@ -8,3 +8,12 @@ build/
 # IntelliJ IDEA
 /.idea/
 *.iml
+
+# Kotlin
+.kotlin/
+
+# Sample XMLs
+*.xml
+
+# MacOS
+.DS_Store
