@@ -21,12 +21,13 @@ import de.libf.ptek.dto.Location
 import de.libf.ptek.dto.Product
 import io.ktor.client.HttpClient
 import io.ktor.http.Url
+import nl.adaptivity.xmlutil.serialization.XML
 import kotlin.jvm.JvmOverloads
 
 /**
  * @author Andreas Schildbach
  */
-class VvoProvider @JvmOverloads constructor(apiBase: Url = API_BASE, httpClient: HttpClient = defaultHttpClient) :
+class VvoProvider @JvmOverloads constructor(apiBase: Url = API_BASE, httpClient: HttpClient = defaultHttpClient, xml: XML = defaultXml) :
     AbstractEfaProvider(NetworkId.VVO, apiBase, null, null, STOP_FINDER_ENDPOINT, COORD_ENDPOINT, httpClient) {
     init {
 //        setRequestUrlEncoding(Charsets.UTF_8)

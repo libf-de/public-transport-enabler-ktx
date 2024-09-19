@@ -1,7 +1,9 @@
-Public Transport Enabler
+Public Transport Enabler for KotlinX
 ========================
 
-This is a Java library allowing you to get data from public transport providers.
+This is a Kotlin Multiplatform library allowing you to get data from public transport providers.
+It's a fork of the great [Public Transport Enabler](https://github.com/schildbach/public-transport-enabler) by Andreas Schildbach.
+
 Look into [NetworkProvider.java](https://github.com/schildbach/public-transport-enabler/blob/master/src/de/schildbach/pte/NetworkProvider.java) for an overview of the API.
 
 Using providers that require secrets
@@ -16,6 +18,8 @@ You need to request the secrets directly from the provider.
 
 How to run live tests?
 ----------------------
+
+### Tests are not yet converted :(
 
 Make sure the test you want to run does not require a secret and if it does, see above for how to get one.
 Once you have the secret or if your provider does not need one, you can run the tests in your IDE.

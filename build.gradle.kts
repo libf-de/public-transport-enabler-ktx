@@ -22,7 +22,7 @@ plugins {
 }
 
 group = "de.libf.ptek"
-version = "0.0.4"
+version = "0.0.5"
 val archivesBaseName = "public-transport-enabler-ktx"
 
 repositories {

@@ -19,13 +19,6 @@ package de.libf.ptek
 import de.libf.ptek.AbstractEfaProvider.Companion.P_STATION_NAME_WHITESPACE
 import de.libf.ptek.AbstractEfaProvider.ItdTripsResponse.ItdTripRequest.ItdItinerary.ItdRouteList.ItdRoute.ItdPartialRouteList.ItdPartialRoute.ItdPoint
 import de.libf.ptek.AbstractEfaProvider.JsonMessage
-import de.libf.ptek.dto.Location
-import de.libf.ptek.dto.SuggestLocationsResult
-import de.libf.ptek.exception.ParserException
-import io.ktor.client.HttpClient
-import io.ktor.http.URLBuilder
-import io.ktor.http.Url
-import io.ktor.http.appendPathSegments
 import de.libf.ptek.NetworkProvider.WalkSpeed
 import de.libf.ptek.dto.Departure
 import de.libf.ptek.dto.Fare
@@ -33,15 +26,43 @@ import de.libf.ptek.dto.IndividualLeg
 import de.libf.ptek.dto.Leg
 import de.libf.ptek.dto.Line
 import de.libf.ptek.dto.LineDestination
+import de.libf.ptek.dto.Location
+import de.libf.ptek.dto.NearbyLocationsResult
 import de.libf.ptek.dto.Point
+import de.libf.ptek.dto.Product
+import de.libf.ptek.dto.PublicLeg
+import de.libf.ptek.dto.QueryDeparturesResult
+import de.libf.ptek.dto.QueryTripsResult
 import de.libf.ptek.dto.ResultHeader
+import de.libf.ptek.dto.StationDepartures
+import de.libf.ptek.dto.Stop
+import de.libf.ptek.dto.SuggestLocationsResult
 import de.libf.ptek.dto.SuggestedLocation
+import de.libf.ptek.dto.Trip
+import de.libf.ptek.dto.TripOptions
+import de.libf.ptek.dto.formatTo7DecimalPlaces
+import de.libf.ptek.exception.ParserException
 import de.libf.ptek.util.AbstractLogger
 import de.libf.ptek.util.PrintlnLogger
-import io.ktor.client.call.body
+import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.URLBuilder
+import io.ktor.http.Url
+import io.ktor.http.appendPathSegments
+import io.ktor.serialization.kotlinx.xml.xml
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.UtcOffset
+import kotlinx.datetime.asTimeZone
+import kotlinx.datetime.format
+import kotlinx.datetime.format.DateTimeComponents
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -52,36 +73,15 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonObject
-import io.ktor.serialization.kotlinx.xml.*
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.UtcOffset
-import kotlinx.datetime.format.DateTimeComponents
-import kotlinx.datetime.toInstant
-import net.thauvin.erik.urlencoder.UrlEncoderUtil
-import de.libf.ptek.dto.NearbyLocationsResult
-import de.libf.ptek.dto.Product
-import de.libf.ptek.dto.PublicLeg
-import de.libf.ptek.dto.QueryDeparturesResult
-import de.libf.ptek.dto.QueryTripsResult
-import de.libf.ptek.dto.StationDepartures
-import de.libf.ptek.dto.Stop
-import de.libf.ptek.dto.Trip
-import de.libf.ptek.dto.TripOptions
-import de.libf.ptek.dto.formatTo7DecimalPlaces
-import io.ktor.client.statement.HttpResponse
-import kotlinx.datetime.Instant
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalTime
-import kotlinx.datetime.format
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.serializersModuleOf
+import net.thauvin.erik.urlencoder.UrlEncoderUtil
 import nl.adaptivity.xmlutil.serialization.XML
 import nl.adaptivity.xmlutil.serialization.XmlElement
 import nl.adaptivity.xmlutil.serialization.XmlSerialName
-import nl.adaptivity.xmlutil.serialization.XmlSerializationPolicy
 import nl.adaptivity.xmlutil.serialization.XmlValue
 import kotlin.time.Duration.Companion.minutes
 
@@ -118,6 +118,8 @@ abstract class AbstractEfaProvider(
     private var useLineRestriction = true
     private var useStringCoordListOutputFormat = true
     private var fareCorrectionFactor = 1f
+
+    private val timezone: TimeZone = TimeZone.UTC
 
 //    private var parserFactory: XmlPullParserFactory? = null
 
@@ -512,7 +514,7 @@ abstract class AbstractEfaProvider(
         }
 
         try {
-            val data = rsp.body<StopfinderXmlResponse>()
+            val data = xml.decodeFromString(StopfinderXmlResponse.serializer(), rsp.bodyAsText())
 
             if(data.error != null) throw RuntimeException("error: ${data.error}")
 
@@ -749,7 +751,7 @@ abstract class AbstractEfaProvider(
         }
 
         try {
-            val data = rsp.body<XmlCoordResponse>()
+            val data = xml.decodeFromString(XmlCoordResponse.serializer(), rsp.bodyAsText())
 
             val header = data.parseHeader()
 
@@ -882,7 +884,7 @@ abstract class AbstractEfaProvider(
         }
 
         try {
-            val data = rsp.body<MobileCoordEfa>()
+            val data = xml.decodeFromString(MobileCoordEfa.serializer(), rsp.bodyAsText())
 
             val header = data.pas.parseHeader(data.now)
 
@@ -1412,7 +1414,7 @@ abstract class AbstractEfaProvider(
         }.get(url.build())
 
         try {
-            val data = rsp.body<ItdDepartureMonitorResult>()
+            val data = xml.decodeFromString(ItdDepartureMonitorResult.serializer(), rsp.bodyAsText())
 
             val header = data.parseHeader()
 
@@ -2671,14 +2673,14 @@ abstract class AbstractEfaProvider(
     }
 
     private fun appendItdDateTimeParameters(url: URLBuilder, time: Long) {
-        val t = Instant.fromEpochMilliseconds(time)
+        val t = Instant.fromEpochMilliseconds(time).toLocalDateTime(TimeZone.currentSystemDefault())
 
-        val dateFmt = DateTimeComponents.Format {
+        val dateFmt = LocalDateTime.Format {
             year()
             monthNumber()
             dayOfMonth()
         }
-        val timeFmt = DateTimeComponents.Format {
+        val timeFmt = LocalDateTime.Format {
             hour()
             minute()
         }
@@ -2704,7 +2706,7 @@ abstract class AbstractEfaProvider(
         }
 
         try {
-            val data = rsp.body<ItdDepartureMonitorResult>()
+            val data = xml.decodeFromString(ItdDepartureMonitorResult.serializer(), rsp.bodyAsText())
 
             val header = data.parseHeader()
 
@@ -2806,8 +2808,8 @@ abstract class AbstractEfaProvider(
 
                 assignedStationDepartures.departures.add(
                     Departure(
-                        plannedTime = plannedDepartureTime?.toInstant(UtcOffset.ZERO)?.toEpochMilliseconds(),
-                        predictedTime = predictedDepartureTime?.toInstant(UtcOffset.ZERO)?.toEpochMilliseconds(),
+                        plannedTime = plannedDepartureTime?.toInstant(timezone)?.toEpochMilliseconds(),
+                        predictedTime = predictedDepartureTime?.toInstant(timezone)?.toEpochMilliseconds(),
                         line = dep.itdServingLine.lineAsLine(),
                         position = position,
                         destination = dep.itdServingLine.destinationAsLocation(),
@@ -3572,19 +3574,18 @@ abstract class AbstractEfaProvider(
         val url = URLBuilder(tripEndpoint)
         appendTripRequestParameters(url, from, via, to, date, dep, options)
 
-//        val rsp = httpClient.config {
-//            install(ContentNegotiation) {
-//                xml()
-//            }
-//        }.get(url.build()) {
-//            setHttpReferer(httpReferer)
-//        }
-
-        val rsp = xmlHttpClient.get(url.build()) {
+        val rsp = httpClient.config {
+            install(ContentNegotiation) {
+                xml()
+            }
+        }.get(url.build()) {
             setHttpReferer(httpReferer)
         }
 
-        return parseQueryTripsResponse(rsp.body<ItdTripsResponse>(), url.build())
+        return parseQueryTripsResponse(
+            xml.decodeFromString(ItdTripsResponse.serializer(), rsp.bodyAsText()),
+            url.build()
+        )
     }
 
     fun parseQueryTripsResponse(data: ItdTripsResponse, url: Url): QueryTripsResult {
@@ -3683,7 +3684,7 @@ abstract class AbstractEfaProvider(
                     val departureTime = firstStop.itdDateTime.first().let { dt ->
                         dt.itdDate.toLocalDate()?.let {
                             LocalDateTime(it, dt.itdTime.toLocalTime())
-                                .toInstant(UtcOffset.ZERO)
+                                .toInstant(timezone)
                                 .toEpochMilliseconds()
                         }
                     }
@@ -3691,7 +3692,7 @@ abstract class AbstractEfaProvider(
                     val departureTargetTime = firstStop.itdDateTimeTarget?.let { dt ->
                         dt.itdDate.toLocalDate()?.let {
                             LocalDateTime(it, dt.itdTime.toLocalTime())
-                                .toInstant(UtcOffset.ZERO)
+                                .toInstant(timezone)
                                 .toEpochMilliseconds()
                         }
                     }
@@ -3704,7 +3705,7 @@ abstract class AbstractEfaProvider(
                     val arrivalTime = lastStop.itdDateTime.last().let { dt ->
                         dt.itdDate.toLocalDate()?.let {
                             LocalDateTime(it, dt.itdTime.toLocalTime())
-                                .toInstant(UtcOffset.ZERO)
+                                .toInstant(timezone)
                                 .toEpochMilliseconds()
                         }
                     }
@@ -3712,7 +3713,7 @@ abstract class AbstractEfaProvider(
                     val arrivalTargetTime = lastStop.itdDateTimeTarget?.let { dt ->
                         dt.itdDate.toLocalDate()?.let {
                             LocalDateTime(it, dt.itdTime.toLocalTime())
-                                .toInstant(UtcOffset.ZERO)
+                                .toInstant(timezone)
                                 .toEpochMilliseconds()
                         }
                     }
@@ -3773,7 +3774,7 @@ abstract class AbstractEfaProvider(
                                         LocalDateTime(
                                             it,
                                             dt.itdTime.toLocalTime()
-                                        ).toInstant(UtcOffset.ZERO)
+                                        ).toInstant(timezone)
                                     }
                                 }
 
@@ -3786,7 +3787,7 @@ abstract class AbstractEfaProvider(
                                         LocalDateTime(
                                             it,
                                             dt.itdTime.toLocalTime()
-                                        ).toInstant(UtcOffset.ZERO)
+                                        ).toInstant(timezone)
                                     }
                                 }
 
@@ -4042,21 +4043,18 @@ abstract class AbstractEfaProvider(
         appendCommonRequestParams(url, "XML")
         url.parameters.append("command", if (later) "tripNext" else "tripPrev")
 
-        val rsp = xmlHttpClient.get(url.build()) {
+        val rsp = httpClient.config {
+            install(ContentNegotiation) {
+                xml()
+            }
+        }.get(url.build()) {
             setHttpReferer(httpReferer)
         }
 
-//        val rsp = httpClient.config {
-//            install(ContentNegotiation) {
-//                xml()
-//            }
-//        }.get(url.build()) {
-//            setHttpReferer(httpReferer)
-//        }
-
-//        val data = xml.decodeFromString(ItdTripsResponse.serializer(), rsp.bodyAsText())
-
-        return parseQueryTripsResponse(rsp.body<ItdTripsResponse>(), url.build())
+        return parseQueryTripsResponse(
+            xml.decodeFromString(ItdTripsResponse.serializer(), rsp.bodyAsText()),
+            url.build()
+        )
     }
 //
 //    @Throws(IOException::class)
@@ -5298,7 +5296,7 @@ abstract class AbstractEfaProvider(
             serverProduct = SERVER_PRODUCT,
             serverVersion = this.version,
             serverName = this.serverID,
-            serverTime = LocalDateTime.parse(this.now).toInstant(UtcOffset(0)).toEpochMilliseconds(),
+            serverTime = LocalDateTime.parse(this.now).toInstant(timezone).toEpochMilliseconds(),
             context = this.sessionID
         )
     }
@@ -5315,7 +5313,7 @@ abstract class AbstractEfaProvider(
             serverProduct = SERVER_PRODUCT,
             serverVersion = null,
             serverName = serverId,
-            serverTime = now.toInstant(UtcOffset(0)).toEpochMilliseconds(),
+            serverTime = now.toInstant(timezone).toEpochMilliseconds(),
             context = arrayOf(sessionId, requestId)
         )
     }
