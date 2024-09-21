@@ -42,6 +42,7 @@ import de.libf.ptek.dto.Trip
 import de.libf.ptek.dto.TripOptions
 import de.libf.ptek.exception.ParserException
 import de.libf.ptek.util.AbstractLogger
+import de.libf.ptek.util.PathUtil
 import de.libf.ptek.util.PolylineFormat
 import de.libf.ptek.util.PrintlnLogger
 import io.ktor.client.HttpClient
@@ -1186,7 +1187,11 @@ abstract class AbstractHafasClientInterfaceProvider(
                         departureStop = departureStop,
                         arrivalStop = arrivalStop,
                         intermediateStops = intermediateStops ?: emptyList(),
-                        path = path,
+                        path = path ?: PathUtil.interpolatePath(
+                            departureStop.location,
+                            intermediateStops,
+                            arrivalStop.location
+                        ),
                         message = message
                     )
                 } else if (secType.isIndividualType()) {
@@ -1197,7 +1202,11 @@ abstract class AbstractHafasClientInterfaceProvider(
                         departureStop.getDepartureTime()!!,
                         arrivalStop.location,
                         arrivalStop.getArrivalTime()!!,
-                        null,
+                        PathUtil.interpolatePath(
+                            departureStop.location,
+                            null,
+                            arrivalStop.location
+                        ),
                         distance
                     )
                 } else {

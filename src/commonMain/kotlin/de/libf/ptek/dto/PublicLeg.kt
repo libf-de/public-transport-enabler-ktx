@@ -23,7 +23,7 @@ data class PublicLeg(
     val departureStop: Stop,
     val arrivalStop: Stop,
     val intermediateStops: List<Stop>?,
-    override val path: List<Point>?,
+    override val path: List<Point>,
     val message: String?
 ) : Leg {
     override val departure: Location

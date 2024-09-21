@@ -23,7 +23,7 @@ data class IndividualLeg(
     override val departureTime: Long,
     override val arrival: Location,
     override val arrivalTime: Long,
-    override val path: List<Point>?,
+    override val path: List<Point>,
     val distance: Int,
 ) : Leg {
     enum class Type { WALK, BIKE, CAR, TRANSFER, CHECK_IN, CHECK_OUT }

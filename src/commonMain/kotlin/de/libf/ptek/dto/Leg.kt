@@ -21,7 +21,7 @@ interface Leg {
     val departure: Location
     val arrival: Location
 
-    val path: List<Point>?
+    val path: List<Point>
 
     val departureTime: Long
     val arrivalTime: Long
