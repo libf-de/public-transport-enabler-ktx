@@ -43,6 +43,7 @@ import de.libf.ptek.dto.TripOptions
 import de.libf.ptek.dto.formatTo7DecimalPlaces
 import de.libf.ptek.exception.ParserException
 import de.libf.ptek.util.AbstractLogger
+import de.libf.ptek.util.PathUtil
 import de.libf.ptek.util.PrintlnLogger
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -83,6 +84,13 @@ import nl.adaptivity.xmlutil.serialization.XML
 import nl.adaptivity.xmlutil.serialization.XmlElement
 import nl.adaptivity.xmlutil.serialization.XmlSerialName
 import nl.adaptivity.xmlutil.serialization.XmlValue
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.roundToLong
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -372,6 +380,8 @@ abstract class AbstractEfaProvider(
 
         val rsp = httpClient.get(url.build())
 
+        println("jsonStopfinderRequest: ${url.build().toString()}")
+
         //val page: CharSequence = httpClient.get(url.build())
         val header: ResultHeader = ResultHeader(network, SERVER_PRODUCT)
 
@@ -512,6 +522,8 @@ abstract class AbstractEfaProvider(
         }.get(url.build()) {
             setHttpReferer(httpReferer)
         }
+
+        println("mobileStopfinderRequest: ${url.buildString()}")
 
         try {
             val data = xml.decodeFromString(StopfinderXmlResponse.serializer(), rsp.bodyAsText())
@@ -750,6 +762,8 @@ abstract class AbstractEfaProvider(
             setHttpReferer(httpReferer)
         }
 
+        println("xmlCoordRequest: ${url.buildString()}")
+
         try {
             val data = xml.decodeFromString(XmlCoordResponse.serializer(), rsp.bodyAsText())
 
@@ -882,6 +896,8 @@ abstract class AbstractEfaProvider(
         }.get(url.build()) {
             setHttpReferer(httpReferer)
         }
+
+        println("mobileCoordRequest: ${url.buildString()}")
 
         try {
             val data = xml.decodeFromString(MobileCoordEfa.serializer(), rsp.bodyAsText())
@@ -1286,8 +1302,14 @@ abstract class AbstractEfaProvider(
 //            @XmlElement(true) val itdDateRange: ItdDateRange,
 //            @XmlElement(true) val itdTripOptions: ItdTripOptions,
             @XmlElement(true) val itdServingLines: ItdServingLines? = null,
-            @XmlElement(true) val itdDepartureList: List<ItdDeparture>? = null
+            @XmlElement(true) val itdDepartureList: ItdDepartureList? = null
         ) {
+
+            @Serializable
+            @XmlSerialName("itdDepartureList")
+            data class ItdDepartureList(
+                val itdDeparture: List<ItdDeparture> = emptyList()
+            )
 
             @Serializable
             @XmlSerialName("itdDeparture")
@@ -1306,7 +1328,7 @@ abstract class AbstractEfaProvider(
 //                @XmlElement(false) val nameWO: String,
                 @XmlElement(false) val pointType: String? = null,
 //                @XmlElement(false) val countdown: Int,
-                @XmlElement(false) val realtimeTripStatus: String,
+//                @XmlElement(false) val realtimeTripStatus: String? = null,
                 @XmlElement(true) val itdDateTime: ItdDateTime,
                 @XmlElement(true) val itdDateTimeBaseTimetable: ItdDateTimeBaseTimetable? = null, //ignore
                 @XmlElement(true) val itdRTDateTime: ItdRTDateTime? = null,
@@ -1333,13 +1355,13 @@ abstract class AbstractEfaProvider(
             @Serializable
             @XmlSerialName("itdServingLines")
             data class ItdServingLines(
-                @XmlElement(false) val trainInfo: String,
-                @XmlElement(false) val selected: Int,
-                @XmlElement(true) val itdServingLine: List<ItdServingLine>
+                @XmlElement(true) val itdServingLine: List<ItdServingLine> = emptyList()
             ) {
                 @Serializable
                 @XmlSerialName("itdServingLine")
                 data class ItdServingLine(
+                    @XmlElement(false) val trainInfo: String? = null,
+                    @XmlElement(false) val selected: Int? = null,
                     @XmlElement(false) val number: String? = null, //USED
                     @XmlElement(false) val symbol: String? = null, //USED
                     @XmlElement(false) val motType: String, //USED
@@ -1412,6 +1434,8 @@ abstract class AbstractEfaProvider(
                 xml()
             }
         }.get(url.build())
+
+        println("nearbyStationsRequest: ${url.buildString()}")
 
         try {
             val data = xml.decodeFromString(ItdDepartureMonitorResult.serializer(), rsp.bodyAsText())
@@ -2705,6 +2729,8 @@ abstract class AbstractEfaProvider(
             setHttpReferer(httpReferer)
         }
 
+        println("xsltDepMonReq: ${url.buildString()}")
+
         try {
             val data = xml.decodeFromString(ItdDepartureMonitorResult.serializer(), rsp.bodyAsText())
 
@@ -2762,7 +2788,7 @@ abstract class AbstractEfaProvider(
                                 Location(it.assignedStopID, Location.Type.STATION),
                                 mutableListOf(),
                                 mutableListOf()
-                            )/*.also { stationDepartures.add(it) }*/
+                            ).also { stationDepartures.add(it) }
                     // The original PTE does not seem to add the created stationDeparture to
                     // the stationDepartures list. TODO: Confirm whether that is what is supposed to happen
 
@@ -2771,7 +2797,7 @@ abstract class AbstractEfaProvider(
                 }
             } ?: return QueryDeparturesResult(header, QueryDeparturesResult.Status.INVALID_STATION)
 
-            data.itdDepartureMonitorRequest.itdDepartureList?.forEach { dep ->
+            data.itdDepartureMonitorRequest.itdDepartureList?.itdDeparture?.forEach { dep ->
                 if(dep.itdServingLine.isCancelled()) return@forEach
 
                 val assignedStationDepartures = stationDepartures
@@ -2784,7 +2810,7 @@ abstract class AbstractEfaProvider(
                         ),
                         mutableListOf(),
                         mutableListOf()
-                    )
+                    ).also { stationDepartures.add(it) }
 
                 val position = parsePosition(dep.platformName)
 
@@ -3862,7 +3888,11 @@ abstract class AbstractEfaProvider(
                                     departureStop = departureStop,
                                     arrivalStop = arrivalStop,
                                     intermediateStops = intermediateStops,
-                                    path = path,
+                                    path = path ?: PathUtil.interpolatePath(
+                                        departureLocation,
+                                        intermediateStops,
+                                        arrivalLocation
+                                    ),
                                     message = message
                                 )
                             )
@@ -3887,14 +3917,17 @@ abstract class AbstractEfaProvider(
                                 if(lastLeg is IndividualLeg && lastLeg.type == IndividualLeg.Type.WALK) {
                                     val lastIndiviual = legs.removeLast() as IndividualLeg
 
-                                    if(path != null && lastIndiviual.path != null)
-                                        path.addAll(0, lastIndiviual.path!!)
+                                    path?.addAll(0, lastIndiviual.path)
 
                                     legs.add(
                                         lastIndiviual.copy(
                                             arrival = arrivalLocation,
                                             arrivalTime = arrivalTime ?: 0,
-                                            path = path,
+                                            path = path ?: PathUtil.interpolatePath(
+                                                lastIndiviual.departure,
+                                                null,
+                                                arrivalLocation
+                                            ),
                                             distance = lastIndiviual.distance + (pr.distance ?: 0)
                                         )
                                     )
@@ -3906,7 +3939,11 @@ abstract class AbstractEfaProvider(
                                             departureTime = departureTime ?: 0,
                                             arrival = arrivalLocation,
                                             arrivalTime = arrivalTime ?: 0,
-                                            path = path,
+                                            path = path ?: PathUtil.interpolatePath(
+                                                departureLocation,
+                                                null,
+                                                arrivalLocation
+                                            ),
                                             distance = pr.distance ?: 0
                                         )
                                     )
@@ -3920,14 +3957,17 @@ abstract class AbstractEfaProvider(
                                 if(lastLeg is IndividualLeg && lastLeg.type == IndividualLeg.Type.CAR) {
                                     val lastIndiviual = legs.removeLast() as IndividualLeg
 
-                                    if(path != null && lastIndiviual.path != null)
-                                        path.addAll(0, lastIndiviual.path!!)
+                                    path?.addAll(0, lastIndiviual.path)
 
                                     legs.add(
                                         lastIndiviual.copy(
                                             arrival = arrivalLocation,
                                             arrivalTime = arrivalTime ?: 0,
-                                            path = path,
+                                            path = path ?: PathUtil.interpolatePath(
+                                                lastIndiviual.departure,
+                                                null,
+                                                arrivalLocation
+                                            ),
                                             distance = lastIndiviual.distance + (pr.distance ?: 0)
                                         )
                                     )
@@ -3939,7 +3979,11 @@ abstract class AbstractEfaProvider(
                                             departureTime = departureTime ?: 0,
                                             arrival = arrivalLocation,
                                             arrivalTime = arrivalTime ?: 0,
-                                            path = path,
+                                            path = path ?: PathUtil.interpolatePath(
+                                                departureLocation,
+                                                null,
+                                                arrivalLocation
+                                            ),
                                             distance = pr.distance ?: 0
                                         )
                                     )
@@ -3986,7 +4030,7 @@ abstract class AbstractEfaProvider(
                     id = tripId,
                     from = firstDepartureLocation!!,
                     to = lastArrivalLocation!!,
-                    legs = legs.toList(),
+                    legs = legs.toList().ensureSeparatingIndividualLegs(),
                     fares = fares,
                     capacity = null,
                     changes = it.changes
@@ -5538,6 +5582,54 @@ abstract class AbstractEfaProvider(
         )
     }
 }
+
+private fun List<Leg>.ensureSeparatingIndividualLegs(): List<Leg> {
+    return this.flatMapIndexed { index, leg ->
+        val nextLeg = this.getOrNull(index + 1)
+        if(leg is PublicLeg && nextLeg is PublicLeg) {
+            val walkDist = leg.arrival.distanceToInMeters(nextLeg.departure)?.toInt() ?: 0
+            val walkDurationMs = (walkDist / 0.00125).roundToLong()
+
+            listOf(leg, IndividualLeg(
+                type = IndividualLeg.Type.WALK,
+                departure = leg.arrival,
+                departureTime = leg.arrivalTime,
+                arrival = nextLeg.departure,
+                arrivalTime = leg.arrivalTime + walkDurationMs,
+                distance = walkDist,
+                path = PathUtil.interpolatePath(
+                    leg.arrival,
+                    null,
+                    nextLeg.arrival
+                )
+            ))
+        } else {
+            listOf(leg)
+        }
+    }
+}
+
+private fun Location.distanceToInMeters(other: Location): Double? {
+    if(!this.hasCoords || !other.hasCoords) return null
+
+    val earthRad = 6371000.0 // Earth's radius in meters
+
+    // Convert degrees to radians
+    val lat1Rad = this.coord!!.lat.toRadians()
+    val lon1Rad = this.coord.lon.toRadians()
+    val lat2Rad = other.coord!!.lat.toRadians()
+    val lon2Rad = other.coord.lon.toRadians()
+
+    // Haversine formula
+    val dlat = lat2Rad - lat1Rad
+    val dlon = lon2Rad - lon1Rad
+    val a = sin(dlat/2).pow(2) + cos(lat1Rad) * cos(lat2Rad) * sin(dlon/2).pow(2)
+    val c = 2 * atan2(sqrt(a), sqrt(1-a))
+
+    return earthRad * c // Returns distance in meters
+}
+
+private fun Double.toRadians(): Double = this * (PI / 180)
 
 private fun HttpClient.installDefaultXml(): HttpClient {
     return this.config {
