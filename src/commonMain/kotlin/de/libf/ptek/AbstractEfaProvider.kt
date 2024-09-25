@@ -127,7 +127,7 @@ abstract class AbstractEfaProvider(
     private var useStringCoordListOutputFormat = true
     private var fareCorrectionFactor = 1f
 
-    private val timezone: TimeZone = TimeZone.UTC
+    private val timezone: TimeZone = TimeZone.currentSystemDefault()
 
 //    private var parserFactory: XmlPullParserFactory? = null
 
@@ -577,8 +577,8 @@ abstract class AbstractEfaProvider(
         url.parameters.append(
             "coord",
             UrlEncoderUtil.encode(
-                coord.lat.formatTo7DecimalPlaces() +
-                    ":${coord.lon.formatTo7DecimalPlaces()}" +
+                coord.lon.formatTo7DecimalPlaces() +
+                    ":${coord.lat.formatTo7DecimalPlaces()}" +
                     ":${COORD_FORMAT}")
         )
         url.parameters.append(
@@ -659,7 +659,7 @@ abstract class AbstractEfaProvider(
             @XmlSerialName("itdCoordInfo")
             data class ItdCoordInfo(
                 @XmlElement val coordInfoRequest: CoordInfoRequest,
-                @XmlElement val coordInfoItemList: CoordInfoItemList
+                @XmlElement val coordInfoItemList: CoordInfoItemList? = null
             ) {
 
                 @Serializable
@@ -769,7 +769,7 @@ abstract class AbstractEfaProvider(
 
             val header = data.parseHeader()
 
-            val locations = data.itdCoordInfoRequest.itdCoordInfo.coordInfoItemList.coordInfoItem.mapNotNull {
+            val locations = data.itdCoordInfoRequest.itdCoordInfo.coordInfoItemList?.coordInfoItem?.mapNotNull {
                 val locationType = when(it.type) {
                     "STOP" -> Location.Type.STATION
                     "POI_POINT" -> Location.Type.POI
@@ -808,7 +808,7 @@ abstract class AbstractEfaProvider(
                 }
             }
 
-            return NearbyLocationsResult(header, NearbyLocationsResult.Status.OK, locations)
+            return NearbyLocationsResult(header, NearbyLocationsResult.Status.OK, locations ?: emptyList())
         } catch (e: Exception) {
             e.printStackTrace()
             throw RuntimeException("Could not parse xml: ${rsp.bodyAsText()}", e)
@@ -1178,7 +1178,7 @@ abstract class AbstractEfaProvider(
     ) {
         fun toLocalDate(): LocalDate? {
             if(year == 0 || weekday < 0) return null
-            return LocalDate(year, month + 1, day)
+            return LocalDate(year, month, day)
         }
     }
 
@@ -3419,7 +3419,7 @@ abstract class AbstractEfaProvider(
             @Serializable
             @XmlSerialName("itdItinerary")
             data class ItdItinerary(
-                @XmlElement(true) val itdRouteList: ItdRouteList
+                @XmlElement(true) val itdRouteList: ItdRouteList? = null
             ) {
                 @Serializable
                 @XmlSerialName("itdRouteList")
@@ -3694,7 +3694,7 @@ abstract class AbstractEfaProvider(
                     it.text == "invalid date"
                 } == true) return QueryTripsResult(header, QueryTripsResult.Status.INVALID_DATE)
 
-            val trips = data.itdTripRequest.itdItinerary.itdRouteList.itdRoute.mapNotNull {
+            val trips = data.itdTripRequest.itdItinerary.itdRouteList?.itdRoute?.mapNotNull {
                 val tripId = listOfNotNull(it.routeIndex, it.routeTripIndex).joinToString("-").takeIf { useRouteIndexAsTripId }
                 val legs: MutableList<Leg> = mutableListOf()
                 var firstDepartureLocation: Location? = null
@@ -4035,7 +4035,7 @@ abstract class AbstractEfaProvider(
                     capacity = null,
                     changes = it.changes
                 ).takeIf { !cancelled }
-            }
+            } ?: emptyList()
 
             return QueryTripsResult(
                 header = header,
